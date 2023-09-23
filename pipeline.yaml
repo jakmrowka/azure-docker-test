@@ -1,0 +1,56 @@
+trigger:
+- main
+
+variables:
+  dockerhub-user: 'gadzina13'
+  image_name: 'gad_docker_test'
+  tag: 'latest'
+  dockerImage: $(dockerhub-user)/$(image_name):$(tag)
+
+jobs:
+- job: RunOnAgents
+  strategy:
+    matrix:
+      gad-mini-pc2:
+        agentName: gad-mini-pc2
+      gad-agent-pi4b:
+        agentName: gad-agent-pi4b
+
+  
+  pool:
+    name: gads-agent-pool
+    demands:
+    - agent.name -equals $(agentName)
+
+  steps:
+  - task: AzureKeyVault@2
+    inputs:
+      azureSubscription: 'Azure dla studentów(232fe18a-7562-4ae5-9507-29d2bde01130)'
+      KeyVaultName: 'credentialsforproject'
+      SecretsFilter: '*'
+      RunAsPreJob: true
+
+  - script: docker login -u $(dockerhub-username) -p $(dockerhub-password)
+    displayName: 'Login to Docker Hub'
+
+
+  - script: docker build --build-arg BUILD_AGENT=$(Agent.Name) -t $(dockerhub-user)/$(image_name):$(tag) .
+    displayName: 'Build and Tag Docker Image'
+
+  - script: docker push $(dockerImage)
+    displayName: 'Push Docker Image to Docker Hub'
+
+  - script: docker rmi $(dockerImage)
+    displayName: 'Remove local Docker image'
+
+  - script: docker pull $(dockerImage)
+    displayName: 'Pull Docker Image from Docker Hub'
+
+  - script: docker run --name gad_test_container $(dockerImage)
+    displayName: 'Run Docker Image'
+
+  - script: docker rm gad_test_container
+    displayName: 'Remove Docker container after execution'
+
+  - script: docker rmi $(dockerImage)
+    displayName: 'Remove Docker image after testing'
