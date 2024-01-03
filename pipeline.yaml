@@ -2,10 +2,16 @@ trigger:
 - main
 
 variables:
-  dockerhub-user: 'gadzina13'
-  image_name: 'gad_docker_test'
-  tag: 'latest'
-  dockerImage: $(dockerhub-user)/$(image_name):$(tag)
+- group: credentials
+- name: dockerhub-user
+  value: 'gadzina13'
+- name: image_name
+  value: 'gad_docker_test'
+- name: tag
+  value: 'latest'
+- name: dockerImage
+  value: $(dockerhub-user)/$(image_name):$(tag)
+
 
 jobs:
 - job: RunOnAgents
@@ -54,3 +60,28 @@ jobs:
 
   - script: docker rmi $(dockerImage)
     displayName: 'Remove Docker image after testing'
+
+  - script: |
+      echo Original: $(Build.Repository.Uri)
+      NEW_REPO_URI=$(echo $(Build.Repository.Uri) | sed 's/https:\/\/.*@/https:\/\//')
+      echo Modified: $NEW_REPO_URI
+      echo "##vso[task.setvariable variable=NEW_REPO_URI]$NEW_REPO_URI"
+    displayName: 'Modify Build Repository URI (Linux)'
+    condition: eq(variables['Agent.OS'], 'Linux')
+
+  - powershell: |
+      $originalUri = "$(Build.Repository.Uri)"
+      Write-Host "Original: $originalUri"
+      $modifiedUri = $originalUri -replace "https://.*@", "https://"
+      Write-Host "Modified: $modifiedUri"
+      echo "##vso[task.setvariable variable=NEW_REPO_URI]$modifiedUri"
+    displayName: 'Modify Build Repository URI (Windows)'
+    condition: eq(variables['Agent.OS'], 'Windows_NT')
+
+  - task: mirror-git-repository-vsts-task@1
+    inputs:
+      sourceGitRepositoryUri: '$(NEW_REPO_URI)'
+      sourceGitRepositoryPersonalAccessToken: '$(azure_pat)'
+      destinationGitRepositoryUri: 'https://github.com/jakmrowka/azure-docker-test'
+      destinationGitRepositoryPersonalAccessToken: '$(git_pat)'
+
